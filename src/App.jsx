@@ -345,7 +345,7 @@ export default function App() {
     (Provide a highly dense, concise, and token-efficient summary of the entire provided conversation period. Extract the core themes, behavioral shifts, and overall progress. Analyze their tone—e.g., overwhelmed, motivated, defensive, stressed—without fluff. Deliver a comprehensive psychological and practical read of the client's state of mind in a tight, concentrated format that maximizes detail while minimizing word count for Claude.)`;
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       
       const parts = [];
       if (audioData) {
@@ -429,7 +429,7 @@ export default function App() {
     - If multiple audio files are provided, separate them clearly with headers like "### Audio File 1", "### Audio File 2", etc.`;
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       
       const parts = [{ text: "Please transcribe the following audio files verbatim:" }];
       stagedAudioFiles.forEach((audio, index) => {
@@ -489,7 +489,7 @@ export default function App() {
 
       const fileMappingText = stagedPhotos.map((photo, index) => `Index ${index}: "${photo.name}"`).join('\n');
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       const payload = {
         contents: [{
           parts: [
@@ -1647,4 +1647,3 @@ function PhotoReportCard({ analysis, onDelete, clientName }) {
     </div>
   );
 }
-
