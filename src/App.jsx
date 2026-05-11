@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // API Key is provided by the execution environment
-const apiKey = ""; 
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 // Exponential backoff fetch for Gemini API
 const fetchWithRetry = async (url, options, retries = 5) => {
