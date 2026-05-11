@@ -1647,3 +1647,4 @@ function PhotoReportCard({ analysis, onDelete, clientName }) {
     </div>
   );
 }
+
