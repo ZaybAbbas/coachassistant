@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Users, UserPlus, MessageSquare, Plus, 
+  Users, MessageSquare, Plus, 
   FileText, Copy, Check, Loader2, AlertCircle, 
   Calendar, Upload, Trash2, Camera, ImagePlus, Download,
   ArrowRight, MousePointer2, PenLine, Circle as CircleIcon, ArrowUpRight, Undo, Eraser,
   Minus, Type, Activity, Mic, FileAudio
 } from 'lucide-react';
 
-// API Key is provided by the execution environment
+// Secure API Key connection to Vercel
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 // Exponential backoff fetch for Gemini API
@@ -144,14 +144,11 @@ const generateCompositeImage = async (beforeSrc, afterSrc) => {
 };
 
 export default function App() {
-  // App State
-  const [clients, setClients] = useState([
-    { id: '1', name: 'Example Client: Sarah', analyses: [], photoAnalyses: [], transcriptions: [] }
-  ]);
-  const [activeClientId, setActiveClientId] = useState('1');
-  const [isAddingClient, setIsAddingClient] = useState(false);
-  const [newClientName, setNewClientName] = useState('');
+  // App State - Workbench layout (no clients, just transient arrays)
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'photos' or 'transcription'
+  const [analyses, setAnalyses] = useState([]);
+  const [photoAnalyses, setPhotoAnalyses] = useState([]);
+  const [transcriptions, setTranscriptions] = useState([]);
   
   // Chat Analysis State
   const [chatInput, setChatInput] = useState('');
@@ -179,8 +176,6 @@ export default function App() {
     side: { before: null, after: null },
     back: { before: null, after: null }
   });
-
-  const activeClient = clients.find(c => c.id === activeClientId);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -271,22 +266,6 @@ export default function App() {
     }
   };
 
-  const handleAddClient = (e) => {
-    e.preventDefault();
-    if (!newClientName.trim()) return;
-    const newClient = {
-      id: Date.now().toString(),
-      name: newClientName,
-      analyses: [],
-      photoAnalyses: [],
-      transcriptions: []
-    };
-    setClients([...clients, newClient]);
-    setNewClientName('');
-    setIsAddingClient(false);
-    setActiveClientId(newClient.id);
-  };
-
   const handleChatUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -345,7 +324,7 @@ export default function App() {
     (Provide a highly dense, concise, and token-efficient summary of the entire provided conversation period. Extract the core themes, behavioral shifts, and overall progress. Analyze their tone—e.g., overwhelmed, motivated, defensive, stressed—without fluff. Deliver a comprehensive psychological and practical read of the client's state of mind in a tight, concentrated format that maximizes detail while minimizing word count for Claude.)`;
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
       
       const parts = [];
       if (audioData) {
@@ -377,7 +356,7 @@ export default function App() {
         report: reportText
       };
 
-      updateClientState('analyses', [newAnalysis, ...activeClient.analyses]);
+      setAnalyses(prev => [newAnalysis, ...prev]);
       setChatInput(''); 
       setAudioData(null);
     } catch (err) {
@@ -429,7 +408,7 @@ export default function App() {
     - If multiple audio files are provided, separate them clearly with headers like "### Audio File 1", "### Audio File 2", etc.`;
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
       
       const parts = [{ text: "Please transcribe the following audio files verbatim:" }];
       stagedAudioFiles.forEach((audio, index) => {
@@ -459,7 +438,7 @@ export default function App() {
         text: transcriptText
       };
 
-      updateClientState('transcriptions', [newTranscription, ...(activeClient.transcriptions || [])]);
+      setTranscriptions(prev => [newTranscription, ...prev]);
       setStagedAudioFiles([]); 
     } catch (err) {
       setTranscriptionError("Transcription failed: " + (err.message || ''));
@@ -489,7 +468,7 @@ export default function App() {
 
       const fileMappingText = stagedPhotos.map((photo, index) => `Index ${index}: "${photo.name}"`).join('\n');
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
       const payload = {
         contents: [{
           parts: [
@@ -554,7 +533,7 @@ export default function App() {
         });
       }
 
-      updateClientState('photoAnalyses', [...newPhotoAnalyses, ...(activeClient.photoAnalyses || [])]);
+      setPhotoAnalyses(prev => [...newPhotoAnalyses, ...prev]);
       setStagedPhotos([]); // Reset form
 
     } catch (err) {
@@ -593,7 +572,7 @@ export default function App() {
         return;
       }
 
-      updateClientState('photoAnalyses', [...newPhotoAnalyses, ...(activeClient.photoAnalyses || [])]);
+      setPhotoAnalyses(prev => [...newPhotoAnalyses, ...prev]);
       
       // Reset state
       setManualPhotos({
@@ -609,456 +588,404 @@ export default function App() {
     }
   };
 
-  const updateClientState = (field, newData) => {
-    setClients(clients.map(client => 
-      client.id === activeClientId ? { ...client, [field]: newData } : client
-    ));
-  };
-
   const deleteItem = (type, itemId) => {
-    let field = 'analyses';
-    if (type === 'photo') field = 'photoAnalyses';
-    if (type === 'transcription') field = 'transcriptions';
-    updateClientState(field, activeClient[field].filter(item => item.id !== itemId));
+    if (type === 'chat') setAnalyses(prev => prev.filter(item => item.id !== itemId));
+    if (type === 'photo') setPhotoAnalyses(prev => prev.filter(item => item.id !== itemId));
+    if (type === 'transcription') setTranscriptions(prev => prev.filter(item => item.id !== itemId));
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Sidebar */}
-      <div className="w-72 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-10">
-        <div className="p-6 border-b border-slate-800">
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Users size={24} className="text-indigo-400" />
-            CoachSync AI
+    <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans">
+      
+      {/* Top Navigation Workspace Header */}
+      <header className="bg-white border-b border-slate-200 px-8 py-4 shadow-sm z-10 flex-shrink-0">
+        <div className="flex flex-col md:flex-row justify-between items-center max-w-6xl mx-auto w-full gap-4">
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+            <div className="bg-indigo-600 p-2 rounded-lg shadow-sm">
+              <Users size={20} className="text-white" />
+            </div>
+            CoachSync Workspace
           </h1>
-          <p className="text-xs text-slate-500 mt-1">Client Intelligence Hub</p>
-        </div>
-
-        <div className="p-4 flex-1 overflow-y-auto">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4 flex justify-between items-center">
-            <span>Your Clients</span>
-            <button onClick={() => setIsAddingClient(true)} className="hover:text-indigo-400 transition-colors" title="Add Client">
-              <UserPlus size={16} />
+          
+          <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
+            <button 
+              onClick={() => setActiveTab('chat')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                activeTab === 'chat' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <MessageSquare size={18} /> Chat Analysis
+            </button>
+            <button 
+              onClick={() => setActiveTab('photos')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                activeTab === 'photos' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Camera size={18} /> Progress Photos
+            </button>
+            <button 
+              onClick={() => setActiveTab('transcription')}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                activeTab === 'transcription' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Mic size={18} /> Voice Transcription
             </button>
           </div>
-
-          {isAddingClient && (
-            <form onSubmit={handleAddClient} className="mb-4">
-              <input
-                type="text" autoFocus placeholder="Client Name..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                value={newClientName} onChange={(e) => setNewClientName(e.target.value)}
-                onBlur={() => { if(!newClientName) setIsAddingClient(false) }}
-              />
-            </form>
-          )}
-
-          <ul className="space-y-1">
-            {clients.map(client => {
-              const totalAnalyses = (client.analyses?.length || 0) + (client.photoAnalyses?.length || 0) + (client.transcriptions?.length || 0);
-              return (
-                <li key={client.id}>
-                  <button
-                    onClick={() => setActiveClientId(client.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm flex items-center justify-between transition-all duration-200 ${
-                      activeClientId === client.id ? 'bg-indigo-600 text-white font-medium shadow-md' : 'hover:bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <span className="truncate">{client.name}</span>
-                    {totalAnalyses > 0 && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        activeClientId === client.id ? 'bg-indigo-500 text-indigo-50' : 'bg-slate-800 text-slate-500'
-                      }`}>
-                        {totalAnalyses}
-                      </span>
-                    )}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
         </div>
-      </div>
+      </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {activeClient ? (
-          <>
-            {/* Header with Tabs */}
-            <header className="bg-white border-b border-slate-200 px-8 py-6">
-              <h2 className="text-2xl font-bold text-slate-800 mb-4">{activeClient.name}</h2>
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setActiveTab('chat')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    activeTab === 'chat' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <MessageSquare size={18} /> Chat Analysis
-                </button>
-                <button 
-                  onClick={() => setActiveTab('photos')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    activeTab === 'photos' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <Camera size={18} /> Progress Photos
-                </button>
-                <button 
-                  onClick={() => setActiveTab('transcription')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                    activeTab === 'transcription' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'
-                  }`}
-                >
-                  <Mic size={18} /> Voice Transcription
-                </button>
-              </div>
-            </header>
+      <main className="flex-1 overflow-y-auto p-8 bg-slate-50">
+        <div className="max-w-6xl mx-auto">
+          {/* --- CHAT TAB --- */}
+          {activeTab === 'chat' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <section 
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 transition-colors hover:border-indigo-300"
+                onDragOver={handleDragOver}
+                onDrop={handleChatDrop}
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <MessageSquare size={20} className="text-indigo-500" /> New Chat Analysis
+                  </h3>
+                  <div className="relative">
+                    <input type="file" accept=".txt,audio/*" ref={chatFileInputRef} onChange={handleChatUpload} className="hidden" />
+                    <button onClick={() => chatFileInputRef.current?.click()} className="text-sm flex items-center gap-2 text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                      <Upload size={16} /> Upload .txt or Audio
+                    </button>
+                  </div>
+                </div>
+                
+                {audioData ? (
+                  <div className="w-full h-32 p-4 border-2 border-dashed border-indigo-300 bg-indigo-50 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
+                    <div className="absolute top-3 right-3">
+                      <button onClick={() => setAudioData(null)} className="text-indigo-400 hover:text-indigo-600 bg-white p-1.5 rounded-md shadow-sm transition-colors" title="Remove Audio">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <Activity size={32} className="text-indigo-500 mb-2" />
+                    <p className="font-semibold text-indigo-900 text-sm">Audio File Attached</p>
+                    <p className="text-xs text-indigo-600 max-w-[80%] truncate mt-1">{audioData.name}</p>
+                  </div>
+                ) : (
+                  <textarea
+                    className="w-full h-32 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm shadow-inner resize-none transition-shadow"
+                    placeholder="Paste WhatsApp chat history here, or drag and drop a .txt or audio file..."
+                    value={chatInput} onChange={(e) => setChatInput(e.target.value)} disabled={isAnalyzingChat}
+                  />
+                )}
 
-            <main className="flex-1 overflow-y-auto p-8 bg-slate-50">
-              
-              {/* --- CHAT TAB --- */}
-              {activeTab === 'chat' && (
-                <div className="max-w-4xl mx-auto space-y-8">
-                  <section 
-                    className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 transition-colors hover:border-indigo-300"
-                    onDragOver={handleDragOver}
-                    onDrop={handleChatDrop}
-                  >
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <MessageSquare size={20} className="text-indigo-500" /> New Chat Analysis
-                      </h3>
-                      <div className="relative">
-                        <input type="file" accept=".txt,audio/*" ref={chatFileInputRef} onChange={handleChatUpload} className="hidden" />
-                        <button onClick={() => chatFileInputRef.current?.click()} className="text-sm flex items-center gap-2 text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
-                          <Upload size={16} /> Upload .txt or Audio
+                {chatError && <div className="mt-3 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-2 rounded-lg"><AlertCircle size={16}/>{chatError}</div>}
+                <div className="mt-4 flex justify-end">
+                  <button onClick={analyzeChat} disabled={isAnalyzingChat || (!chatInput.trim() && !audioData)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:bg-slate-400 flex items-center gap-2 shadow-sm">
+                    {isAnalyzingChat ? <><Loader2 size={18} className="animate-spin" /> Analyzing...</> : <><FileText size={18} /> Generate AI Report</>}
+                  </button>
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Analysis History</h3>
+                {analyses.map(analysis => (
+                  <ChatReportCard key={analysis.id} analysis={analysis} onDelete={() => deleteItem('chat', analysis.id)} />
+                ))}
+                {analyses.length === 0 && (
+                  <div className="text-center py-16 bg-slate-100/50 rounded-2xl border border-slate-200 border-dashed">
+                    <FileText size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">Your workspace is clean.</p>
+                    <p className="text-slate-400 text-sm mt-1">Paste a chat above to generate a new report.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* --- TRANSCRIPTION TAB --- */}
+          {activeTab === 'transcription' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <Mic size={20} className="text-indigo-500" /> Verbatim Voice Transcription
+                  </h3>
+                </div>
+
+                <div 
+                  className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[200px] bg-slate-50 relative group mb-6 transition-colors hover:bg-slate-100 hover:border-indigo-400"
+                  onDragOver={handleDragOver}
+                  onDrop={handleTranscriptionDrop}
+                >
+                  {stagedAudioFiles.length > 0 ? (
+                    <div className="w-full">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="font-semibold text-slate-700">{stagedAudioFiles.length} voice notes staged for transcription</span>
+                        <button onClick={() => setStagedAudioFiles([])} className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors">Clear All</button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {stagedAudioFiles.map((audioObj, i) => (
+                          <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="bg-indigo-50 p-2 rounded-lg"><FileAudio size={20} className="text-indigo-500" /></div>
+                              <span className="text-sm font-medium text-slate-700 truncate">{audioObj.name}</span>
+                            </div>
+                            <button onClick={() => setStagedAudioFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500 transition-colors">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          onClick={() => transcriptionFileInputRef.current?.click()} 
+                          className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-4 flex items-center justify-center gap-2 text-slate-500 hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                        >
+                          <Plus size={18} /> <span className="text-sm font-medium">Add More</span>
                         </button>
                       </div>
                     </div>
-                    
-                    {audioData ? (
-                      <div className="w-full h-32 p-4 border-2 border-dashed border-indigo-300 bg-indigo-50 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
-                        <div className="absolute top-3 right-3">
-                          <button onClick={() => setAudioData(null)} className="text-indigo-400 hover:text-indigo-600 bg-white p-1.5 rounded-md shadow-sm transition-colors" title="Remove Audio">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                        <Activity size={32} className="text-indigo-500 mb-2" />
-                        <p className="font-semibold text-indigo-900 text-sm">Audio File Attached</p>
-                        <p className="text-xs text-indigo-600 max-w-[80%] truncate mt-1">{audioData.name}</p>
+                  ) : (
+                    <div className="flex flex-col items-center text-center">
+                      <div className="bg-indigo-50 p-4 rounded-full mb-4">
+                        <Mic size={32} className="text-indigo-500" />
                       </div>
-                    ) : (
-                      <textarea
-                        className="w-full h-32 p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm shadow-inner resize-none"
-                        placeholder="Paste WhatsApp chat history here, or drag and drop a .txt or audio file..."
-                        value={chatInput} onChange={(e) => setChatInput(e.target.value)} disabled={isAnalyzingChat}
-                      />
-                    )}
-
-                    {chatError && <div className="mt-3 text-red-600 text-sm flex gap-2"><AlertCircle size={16}/>{chatError}</div>}
-                    <div className="mt-4 flex justify-end">
-                      <button onClick={analyzeChat} disabled={isAnalyzingChat || (!chatInput.trim() && !audioData)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:bg-slate-400 flex items-center gap-2">
-                        {isAnalyzingChat ? <><Loader2 size={18} className="animate-spin" /> Analyzing...</> : <><FileText size={18} /> Generate AI Report</>}
+                      <h4 className="text-lg font-medium text-slate-700 mb-1">Upload Voice Notes</h4>
+                      <p className="text-sm text-slate-500 mb-6 max-w-md">
+                        Drag & drop multiple WhatsApp voice notes (.m4a, .mp3, .wav) here. We will transcribe them verbatim with 95%+ accuracy—no summarizing.
+                      </p>
+                      <button 
+                        onClick={() => transcriptionFileInputRef.current?.click()} 
+                        className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-2 shadow-sm"
+                      >
+                        <Upload size={18} /> Browse Audio
                       </button>
                     </div>
-                  </section>
-
-                  <section className="space-y-6">
-                    <h3 className="text-lg font-semibold text-slate-800">History</h3>
-                    {activeClient.analyses?.map(analysis => (
-                      <ChatReportCard key={analysis.id} analysis={analysis} onDelete={() => deleteItem('chat', analysis.id)} />
-                    ))}
-                    {(!activeClient.analyses || activeClient.analyses.length === 0) && (
-                      <p className="text-slate-500 text-center py-8">No chat reports yet.</p>
-                    )}
-                  </section>
+                  )}
+                  <input 
+                    type="file" 
+                    accept="audio/*" 
+                    multiple 
+                    ref={transcriptionFileInputRef} 
+                    onChange={handleMultiAudioSelect} 
+                    className="hidden" 
+                  />
                 </div>
-              )}
 
-              {/* --- TRANSCRIPTION TAB --- */}
-              {activeTab === 'transcription' && (
-                <div className="max-w-4xl mx-auto space-y-8">
-                  <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <Mic size={20} className="text-indigo-500" /> Verbatim Voice Transcription
-                      </h3>
-                    </div>
+                {transcriptionError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{transcriptionError}</div>}
+                
+                <div className="flex justify-end border-t border-slate-100 pt-4">
+                  <button 
+                    onClick={transcribeAudio} 
+                    disabled={isTranscribing || stagedAudioFiles.length === 0} 
+                    className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    {isTranscribing ? <><Loader2 size={18} className="animate-spin" /> Transcribing Verbatim...</> : <><Mic size={18} /> Transcribe All Notes</>}
+                  </button>
+                </div>
+              </section>
 
-                    <div 
-                      className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[200px] bg-slate-50 relative group mb-6 transition-colors hover:bg-slate-100 hover:border-indigo-400"
-                      onDragOver={handleDragOver}
-                      onDrop={handleTranscriptionDrop}
+              <section className="space-y-6">
+                <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Transcription History</h3>
+                {transcriptions.map(transcription => (
+                  <TranscriptionReportCard key={transcription.id} transcription={transcription} onDelete={() => deleteItem('transcription', transcription.id)} />
+                ))}
+                {transcriptions.length === 0 && (
+                  <div className="text-center py-16 bg-slate-100/50 rounded-2xl border border-slate-200 border-dashed">
+                    <FileAudio size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">Your workspace is clean.</p>
+                    <p className="text-slate-400 text-sm mt-1">Upload voice notes to generate transcripts.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* --- PHOTOS TAB --- */}
+          {activeTab === 'photos' && (
+            <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <Camera size={20} className="text-indigo-500" /> Visual Progress
+                  </h3>
+                  <div className="flex bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+                    <button 
+                      onClick={() => setUploadMode('batch')} 
+                      className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${uploadMode === 'batch' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                      {stagedAudioFiles.length > 0 ? (
+                      Batch AI Upload
+                    </button>
+                    <button 
+                      onClick={() => setUploadMode('manual')} 
+                      className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${uploadMode === 'manual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Manual Pair
+                    </button>
+                  </div>
+                </div>
+
+                {uploadMode === 'batch' ? (
+                  <>
+                    <div 
+                      className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[250px] bg-slate-50 relative group mb-6 transition-colors hover:bg-slate-100 hover:border-indigo-400"
+                      onDragOver={handleDragOver}
+                      onDrop={handlePhotoDrop}
+                    >
+                      {stagedPhotos.length > 0 ? (
                         <div className="w-full">
                           <div className="flex justify-between items-center mb-4">
-                            <span className="font-semibold text-slate-700">{stagedAudioFiles.length} voice notes staged for transcription</span>
-                            <button onClick={() => setStagedAudioFiles([])} className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors">Clear All</button>
+                            <span className="font-semibold text-slate-700">{stagedPhotos.length} photos staged for analysis</span>
+                            <button onClick={() => setStagedPhotos([])} className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors">Clear All</button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {stagedAudioFiles.map((audioObj, i) => (
-                              <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                  <div className="bg-indigo-50 p-2 rounded-lg"><FileAudio size={20} className="text-indigo-500" /></div>
-                                  <span className="text-sm font-medium text-slate-700 truncate">{audioObj.name}</span>
+                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                            {stagedPhotos.map((photoObj, i) => (
+                              <div key={i} className="aspect-square rounded-lg overflow-hidden border border-slate-200 relative shadow-sm group/item">
+                                <div className="absolute top-1.5 left-1.5 bg-slate-900/70 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm backdrop-blur-sm z-10">{i}</div>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] truncate px-1.5 py-1 z-10 opacity-0 group-hover/item:opacity-100 transition-opacity" title={photoObj.name}>
+                                  {photoObj.name}
                                 </div>
-                                <button onClick={() => setStagedAudioFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500 transition-colors">
-                                  <Trash2 size={16} />
-                                </button>
+                                <img src={photoObj.dataUrl} alt={`Upload ${i}`} className="w-full h-full object-cover relative z-0" />
                               </div>
                             ))}
                             <button 
-                              onClick={() => transcriptionFileInputRef.current?.click()} 
-                              className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-4 flex items-center justify-center gap-2 text-slate-500 hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                              onClick={() => photoFileInputRef.current?.click()} 
+                              className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center hover:bg-slate-200 hover:border-slate-400 transition-colors text-slate-500 bg-white"
                             >
-                              <Plus size={18} /> <span className="text-sm font-medium">Add More</span>
+                              <Plus size={24} className="mb-1" />
+                              <span className="text-[10px] font-medium uppercase tracking-wider">Add More</span>
                             </button>
                           </div>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center text-center">
-                          <Mic size={48} className="text-slate-400 mb-4" />
-                          <h4 className="text-lg font-medium text-slate-700 mb-1">Upload Voice Notes</h4>
+                          <div className="bg-indigo-50 p-4 rounded-full mb-4">
+                            <ImagePlus size={32} className="text-indigo-500" />
+                          </div>
+                          <h4 className="text-lg font-medium text-slate-700 mb-1">Upload Progress Photos</h4>
                           <p className="text-sm text-slate-500 mb-6 max-w-md">
-                            Drag & drop multiple WhatsApp voice notes (.m4a, .mp3, .wav) here. We will transcribe them verbatim with 95%+ accuracy—no summarizing.
+                            Select multiple photos at once (e.g. 6 photos). The AI will automatically pair them up chronologically and organize them by front, side, and back views.
                           </p>
                           <button 
-                            onClick={() => transcriptionFileInputRef.current?.click()} 
+                            onClick={() => photoFileInputRef.current?.click()} 
                             className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-2 shadow-sm"
                           >
-                            <Upload size={18} /> Browse Audio
+                            <Upload size={18} /> Browse Images
                           </button>
                         </div>
                       )}
                       <input 
                         type="file" 
-                        accept="audio/*" 
+                        accept="image/*" 
                         multiple 
-                        ref={transcriptionFileInputRef} 
-                        onChange={handleMultiAudioSelect} 
+                        ref={photoFileInputRef} 
+                        onChange={handleMultiImageSelect} 
                         className="hidden" 
                       />
                     </div>
 
-                    {transcriptionError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{transcriptionError}</div>}
+                    {photoError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{photoError}</div>}
                     
                     <div className="flex justify-end border-t border-slate-100 pt-4">
                       <button 
-                        onClick={transcribeAudio} 
-                        disabled={isTranscribing || stagedAudioFiles.length === 0} 
+                        onClick={analyzePhotos} 
+                        disabled={isAnalyzingPhotos || stagedPhotos.length < 2} 
                         className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
                       >
-                        {isTranscribing ? <><Loader2 size={18} className="animate-spin" /> Transcribing Verbatim...</> : <><Mic size={18} /> Transcribe All Notes</>}
+                        {isAnalyzingPhotos ? <><Loader2 size={18} className="animate-spin" /> Analyzing Bulk Photos...</> : <><Camera size={18} /> Process & Pair All Photos</>}
                       </button>
                     </div>
-                  </section>
-
-                  <section className="space-y-6">
-                    <h3 className="text-lg font-semibold text-slate-800">Transcription History</h3>
-                    {activeClient.transcriptions?.map(transcription => (
-                      <TranscriptionReportCard key={transcription.id} transcription={transcription} onDelete={() => deleteItem('transcription', transcription.id)} />
-                    ))}
-                    {(!activeClient.transcriptions || activeClient.transcriptions.length === 0) && (
-                      <p className="text-slate-500 text-center py-8">No transcriptions yet.</p>
-                    )}
-                  </section>
-                </div>
-              )}
-
-              {/* --- PHOTOS TAB --- */}
-              {activeTab === 'photos' && (
-                <div className="max-w-5xl mx-auto space-y-8">
-                  <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <Camera size={20} className="text-indigo-500" /> Visual Progress
-                      </h3>
-                      <div className="flex bg-slate-100 p-1 rounded-lg">
-                        <button 
-                          onClick={() => setUploadMode('batch')} 
-                          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${uploadMode === 'batch' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                          Batch AI Upload
-                        </button>
-                        <button 
-                          onClick={() => setUploadMode('manual')} 
-                          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${uploadMode === 'manual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                          Manual Pair
-                        </button>
-                      </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                      <p className="text-sm text-slate-500">Drag & drop individual photos to pair them manually. Fill out any or all views.</p>
                     </div>
 
-                    {uploadMode === 'batch' ? (
-                      <>
-                        <div 
-                          className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[250px] bg-slate-50 relative group mb-6 transition-colors hover:bg-slate-100 hover:border-indigo-400"
-                          onDragOver={handleDragOver}
-                          onDrop={handlePhotoDrop}
-                        >
-                          {stagedPhotos.length > 0 ? (
-                            <div className="w-full">
-                              <div className="flex justify-between items-center mb-4">
-                                <span className="font-semibold text-slate-700">{stagedPhotos.length} photos staged for analysis</span>
-                                <button onClick={() => setStagedPhotos([])} className="text-sm font-medium text-red-500 hover:text-red-700 transition-colors">Clear All</button>
-                              </div>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                                {stagedPhotos.map((photoObj, i) => (
-                                  <div key={i} className="aspect-square rounded-lg overflow-hidden border border-slate-200 relative shadow-sm group/item">
-                                    <div className="absolute top-1.5 left-1.5 bg-slate-900/70 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm backdrop-blur-sm z-10">{i}</div>
-                                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] truncate px-1.5 py-1 z-10 opacity-0 group-hover/item:opacity-100 transition-opacity" title={photoObj.name}>
-                                      {photoObj.name}
-                                    </div>
-                                    <img src={photoObj.dataUrl} alt={`Upload ${i}`} className="w-full h-full object-cover relative z-0" />
-                                  </div>
-                                ))}
-                                <button 
-                                  onClick={() => photoFileInputRef.current?.click()} 
-                                  className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center hover:bg-slate-200 hover:border-slate-400 transition-colors text-slate-500 bg-white"
-                                >
-                                  <Plus size={24} className="mb-1" />
-                                  <span className="text-[10px] font-medium uppercase tracking-wider">Add More</span>
-                                </button>
-                              </div>
+                    <div className="space-y-6 mb-6">
+                      {['front', 'side', 'back'].map(viewType => (
+                        <div key={viewType} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                          <h4 className="text-md font-semibold text-slate-800 capitalize mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            {viewType} View
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            {/* Manual Before Dropzone */}
+                            <div 
+                              className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center min-h-[200px] bg-white relative overflow-hidden group hover:border-indigo-400 transition-colors"
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleManualDrop(e, viewType, 'before')}
+                            >
+                              {manualPhotos[viewType].before ? (
+                                <>
+                                  <img src={manualPhotos[viewType].before} alt={`${viewType} Before`} className="absolute inset-0 w-full h-full object-contain opacity-50 group-hover:opacity-30 transition-opacity" />
+                                  <button onClick={() => setManualPhotos(prev => ({...prev, [viewType]: {...prev[viewType], before: null}}))} className="z-10 bg-white text-slate-700 px-3 py-1.5 rounded-lg font-medium shadow border border-slate-200 hover:bg-slate-50 text-xs">Remove Before</button>
+                                </>
+                              ) : (
+                                <>
+                                  <ImagePlus size={24} className="text-slate-400 mb-2" />
+                                  <p className="text-xs font-medium text-slate-700 mb-1">Old Photo (Before)</p>
+                                  <input id={`upload-${viewType}-before`} type="file" accept="image/*" onChange={(e) => { handleManualFile(e.target.files[0], viewType, 'before'); e.target.value = null; }} className="hidden" />
+                                  <button onClick={() => document.getElementById(`upload-${viewType}-before`).click()} className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-md font-semibold hover:bg-indigo-100 mt-2">Browse or Drop</button>
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-center text-center">
-                              <ImagePlus size={48} className="text-slate-400 mb-4" />
-                              <h4 className="text-lg font-medium text-slate-700 mb-1">Upload Progress Photos</h4>
-                              <p className="text-sm text-slate-500 mb-6 max-w-md">
-                                Select multiple photos at once (e.g. 6 photos). The AI will automatically pair them up chronologically and organize them by front, side, and back views.
-                              </p>
-                              <button 
-                                onClick={() => photoFileInputRef.current?.click()} 
-                                className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-6 py-2.5 rounded-xl font-semibold hover:bg-indigo-100 transition-colors flex items-center gap-2 shadow-sm"
-                              >
-                                <Upload size={18} /> Browse Images
-                              </button>
+
+                            {/* Manual After Dropzone */}
+                            <div 
+                              className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center min-h-[200px] bg-white relative overflow-hidden group hover:border-indigo-400 transition-colors"
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleManualDrop(e, viewType, 'after')}
+                            >
+                              {manualPhotos[viewType].after ? (
+                                <>
+                                  <img src={manualPhotos[viewType].after} alt={`${viewType} After`} className="absolute inset-0 w-full h-full object-contain opacity-50 group-hover:opacity-30 transition-opacity" />
+                                  <button onClick={() => setManualPhotos(prev => ({...prev, [viewType]: {...prev[viewType], after: null}}))} className="z-10 bg-white text-slate-700 px-3 py-1.5 rounded-lg font-medium shadow border border-slate-200 hover:bg-slate-50 text-xs">Remove After</button>
+                                </>
+                              ) : (
+                                <>
+                                  <ImagePlus size={24} className="text-slate-400 mb-2" />
+                                  <p className="text-xs font-medium text-slate-700 mb-1">New Photo (After)</p>
+                                  <input id={`upload-${viewType}-after`} type="file" accept="image/*" onChange={(e) => { handleManualFile(e.target.files[0], viewType, 'after'); e.target.value = null; }} className="hidden" />
+                                  <button onClick={() => document.getElementById(`upload-${viewType}-after`).click()} className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-md font-semibold hover:bg-indigo-100 mt-2">Browse or Drop</button>
+                                </>
+                              )}
                             </div>
-                          )}
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            multiple 
-                            ref={photoFileInputRef} 
-                            onChange={handleMultiImageSelect} 
-                            className="hidden" 
-                          />
+                          </div>
                         </div>
+                      ))}
+                    </div>
 
-                        {photoError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{photoError}</div>}
-                        
-                        <div className="flex justify-end border-t border-slate-100 pt-4">
-                          <button 
-                            onClick={analyzePhotos} 
-                            disabled={isAnalyzingPhotos || stagedPhotos.length < 2} 
-                            className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
-                          >
-                            {isAnalyzingPhotos ? <><Loader2 size={18} className="animate-spin" /> Analyzing Bulk Photos...</> : <><Camera size={18} /> Process & Pair All Photos</>}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
-                          <p className="text-sm text-slate-500">Drag & drop individual photos to pair them manually. Fill out any or all views.</p>
-                        </div>
+                    {photoError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{photoError}</div>}
+                    
+                    <div className="flex justify-end border-t border-slate-100 pt-4">
+                      <button 
+                        onClick={processManualPhotos} 
+                        disabled={isAnalyzingPhotos || !Object.values(manualPhotos).some(v => v.before && v.after)} 
+                        className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
+                      >
+                        {isAnalyzingPhotos ? <><Loader2 size={18} className="animate-spin" /> Generating...</> : <><Camera size={18} /> Generate Side-by-Sides</>}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </section>
 
-                        <div className="space-y-6 mb-6">
-                          {['front', 'side', 'back'].map(viewType => (
-                            <div key={viewType} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                              <h4 className="text-md font-semibold text-slate-800 capitalize mb-3 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                                {viewType} View
-                              </h4>
-                              <div className="grid grid-cols-2 gap-4">
-                                {/* Manual Before Dropzone */}
-                                <div 
-                                  className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center min-h-[200px] bg-white relative overflow-hidden group hover:border-indigo-400 transition-colors"
-                                  onDragOver={handleDragOver}
-                                  onDrop={(e) => handleManualDrop(e, viewType, 'before')}
-                                >
-                                  {manualPhotos[viewType].before ? (
-                                    <>
-                                      <img src={manualPhotos[viewType].before} alt={`${viewType} Before`} className="absolute inset-0 w-full h-full object-contain opacity-50 group-hover:opacity-30 transition-opacity" />
-                                      <button onClick={() => setManualPhotos(prev => ({...prev, [viewType]: {...prev[viewType], before: null}}))} className="z-10 bg-white text-slate-700 px-3 py-1.5 rounded-lg font-medium shadow border border-slate-200 hover:bg-slate-50 text-xs">Remove Before</button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ImagePlus size={24} className="text-slate-400 mb-2" />
-                                      <p className="text-xs font-medium text-slate-700 mb-1">Old Photo (Before)</p>
-                                      <input id={`upload-${viewType}-before`} type="file" accept="image/*" onChange={(e) => { handleManualFile(e.target.files[0], viewType, 'before'); e.target.value = null; }} className="hidden" />
-                                      <button onClick={() => document.getElementById(`upload-${viewType}-before`).click()} className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-md font-semibold hover:bg-indigo-100 mt-2">Browse or Drop</button>
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Manual After Dropzone */}
-                                <div 
-                                  className="border-2 border-dashed border-slate-300 rounded-xl p-4 flex flex-col items-center justify-center min-h-[200px] bg-white relative overflow-hidden group hover:border-indigo-400 transition-colors"
-                                  onDragOver={handleDragOver}
-                                  onDrop={(e) => handleManualDrop(e, viewType, 'after')}
-                                >
-                                  {manualPhotos[viewType].after ? (
-                                    <>
-                                      <img src={manualPhotos[viewType].after} alt={`${viewType} After`} className="absolute inset-0 w-full h-full object-contain opacity-50 group-hover:opacity-30 transition-opacity" />
-                                      <button onClick={() => setManualPhotos(prev => ({...prev, [viewType]: {...prev[viewType], after: null}}))} className="z-10 bg-white text-slate-700 px-3 py-1.5 rounded-lg font-medium shadow border border-slate-200 hover:bg-slate-50 text-xs">Remove After</button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ImagePlus size={24} className="text-slate-400 mb-2" />
-                                      <p className="text-xs font-medium text-slate-700 mb-1">New Photo (After)</p>
-                                      <input id={`upload-${viewType}-after`} type="file" accept="image/*" onChange={(e) => { handleManualFile(e.target.files[0], viewType, 'after'); e.target.value = null; }} className="hidden" />
-                                      <button onClick={() => document.getElementById(`upload-${viewType}-after`).click()} className="text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1.5 rounded-md font-semibold hover:bg-indigo-100 mt-2">Browse or Drop</button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {photoError && <div className="mb-4 text-red-600 text-sm flex items-center gap-2 bg-red-50 p-3 rounded-lg"><AlertCircle size={16}/>{photoError}</div>}
-                        
-                        <div className="flex justify-end border-t border-slate-100 pt-4">
-                          <button 
-                            onClick={processManualPhotos} 
-                            disabled={isAnalyzingPhotos || !Object.values(manualPhotos).some(v => v.before && v.after)} 
-                            className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
-                          >
-                            {isAnalyzingPhotos ? <><Loader2 size={18} className="animate-spin" /> Generating...</> : <><Camera size={18} /> Generate Side-by-Sides</>}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </section>
-
-                  <section className="space-y-8">
-                    <h3 className="text-lg font-semibold text-slate-800">Generated Composites</h3>
-                    {activeClient.photoAnalyses?.map(analysis => (
-                      <PhotoReportCard key={analysis.id} analysis={analysis} onDelete={() => deleteItem('photo', analysis.id)} clientName={activeClient.name} />
-                    ))}
-                    {(!activeClient.photoAnalyses || activeClient.photoAnalyses.length === 0) && (
-                      <p className="text-slate-500 text-center py-8">No visual analyses yet.</p>
-                    )}
-                  </section>
-                </div>
-              )}
-
-            </main>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-slate-50">
-            <div className="text-center max-w-md p-8">
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm"><Users size={32} /></div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to CoachSync</h2>
-              <p className="text-slate-500 mb-6">Select a client to start analyzing chat logs and visual progress.</p>
+              <section className="space-y-8">
+                <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-200 pb-2">Generated Composites</h3>
+                {photoAnalyses.map(analysis => (
+                  <PhotoReportCard key={analysis.id} analysis={analysis} onDelete={() => deleteItem('photo', analysis.id)} clientName="Client" />
+                ))}
+                {photoAnalyses.length === 0 && (
+                  <div className="text-center py-16 bg-slate-100/50 rounded-2xl border border-slate-200 border-dashed">
+                    <ImagePlus size={48} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-500 font-medium">Your workspace is clean.</p>
+                    <p className="text-slate-400 text-sm mt-1">Upload images above to generate side-by-sides.</p>
+                  </div>
+                )}
+              </section>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
@@ -1101,7 +1028,7 @@ function ChatReportCard({ analysis, onDelete }) {
       <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
         <div className="flex items-center gap-2 text-slate-600"><Calendar size={16} /><span className="font-medium text-sm">{new Date(analysis.date).toLocaleDateString()}</span></div>
         <div className="flex items-center gap-2">
-          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">
+          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm">
             {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />} {copied ? 'Copied!' : 'Copy'}
           </button>
           <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
@@ -1135,7 +1062,7 @@ function TranscriptionReportCard({ transcription, onDelete }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors">
+          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm">
             {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />} {copied ? 'Copied!' : 'Copy'}
           </button>
           <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
@@ -1470,7 +1397,7 @@ function PhotoReportCard({ analysis, onDelete, clientName }) {
       const url = canvas.toDataURL('image/jpeg', 0.9);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${clientName.replace(/\s+/g, '-').toLowerCase()}-${analysis.viewType}-progress.jpg`;
+      a.download = `progress-report-${analysis.viewType}.jpg`;
       a.click();
     }, 50);
   };
