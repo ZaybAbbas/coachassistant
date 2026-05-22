@@ -430,12 +430,24 @@ export default function App() {
       const transcriptText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!transcriptText) throw new Error("Failed to generate transcription.");
 
+      // Generate TL;DR summary of the transcript
+      const summaryPayload = {
+        contents: [{ parts: [{ text: `Here is a voice note transcript:\n\n${transcriptText}\n\nWrite a TL;DR summary. Cover every main point the person raised — don't skip anything important, even if there are many points. Format as a concise bullet list. No waffle, no filler.` }] }]
+      };
+      const summaryData = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summaryPayload)
+      });
+      const summaryText = summaryData.candidates?.[0]?.content?.parts?.[0]?.text || null;
+
       const newTranscription = {
         id: Date.now().toString(),
         type: 'transcription',
         date: new Date().toISOString(),
         fileNames: stagedAudioFiles.map(f => f.name).join(', '),
-        text: transcriptText
+        text: transcriptText,
+        summary: summaryText
       };
 
       setTranscriptions(prev => [newTranscription, ...prev]);
@@ -778,7 +790,7 @@ export default function App() {
                     disabled={isTranscribing || stagedAudioFiles.length === 0} 
                     className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-indigo-700 transition-all disabled:bg-slate-400 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
                   >
-                    {isTranscribing ? <><Loader2 size={18} className="animate-spin" /> Transcribing Verbatim...</> : <><Mic size={18} /> Transcribe All Notes</>}
+                    {isTranscribing ? <><Loader2 size={18} className="animate-spin" /> Transcribing & Summarising...</> : <><Mic size={18} /> Transcribe All Notes</>}
                   </button>
                 </div>
               </section>
@@ -1068,7 +1080,16 @@ function TranscriptionReportCard({ transcription, onDelete }) {
           <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
         </div>
       </div>
+      {transcription.summary && (
+        <div className="px-6 pt-5 pb-4 bg-indigo-50 border-b border-indigo-100">
+          <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">TL;DR — Key Points</p>
+          <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+            {transcription.summary}
+          </div>
+        </div>
+      )}
       <div className="p-6">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Full Transcript</p>
         <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-sans">
           {transcription.text}
         </div>
