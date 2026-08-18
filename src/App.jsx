@@ -430,16 +430,21 @@ export default function App() {
       const transcriptText = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!transcriptText) throw new Error("Failed to generate transcription.");
 
-      // Generate TL;DR summary of the transcript
+      // Run TL;DR summary and coaching insights in parallel
       const summaryPayload = {
         contents: [{ parts: [{ text: `Here is a voice note transcript:\n\n${transcriptText}\n\nWrite a TL;DR summary. Cover every main point the person raised — don't skip anything important, even if there are many points. Format as a concise bullet list. No waffle, no filler.` }] }]
       };
-      const summaryData = await fetchWithRetry(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(summaryPayload)
-      });
+      const insightsPayload = {
+        contents: [{ parts: [{ text: `You are an expert fitness and nutrition coach reading a transcript of a client's voice note.\n\nTranscript:\n${transcriptText}\n\nAnalyse this from a coaching perspective and return two sections:\n\n**What's going well:**\n- List every positive sign — good habits, compliance, wins, mindset shifts, anything the client is doing right. Be specific to what they actually said.\n\n**Needs your attention:**\n- List every area of struggle, concern, inconsistency, or where they need coaching support. Be specific and practical — what does the coach need to follow up on?\n\nOnly include points that are clearly supported by what the client actually said. No waffle.` }] }]
+      };
+
+      const [summaryData, insightsData] = await Promise.all([
+        fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(summaryPayload) }),
+        fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(insightsPayload) })
+      ]);
+
       const summaryText = summaryData.candidates?.[0]?.content?.parts?.[0]?.text || null;
+      const insightsText = insightsData.candidates?.[0]?.content?.parts?.[0]?.text || null;
 
       const newTranscription = {
         id: Date.now().toString(),
@@ -447,7 +452,8 @@ export default function App() {
         date: new Date().toISOString(),
         fileNames: stagedAudioFiles.map(f => f.name).join(', '),
         text: transcriptText,
-        summary: summaryText
+        summary: summaryText,
+        insights: insightsText
       };
 
       setTranscriptions(prev => [newTranscription, ...prev]);
@@ -1086,6 +1092,32 @@ function TranscriptionReportCard({ transcription, onDelete }) {
           <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-sans">
             {transcription.summary}
           </div>
+        </div>
+      )}
+      {transcription.insights && (
+        <div className="grid grid-cols-2 border-b border-slate-200">
+          {(() => {
+            const wellMatch = transcription.insights.match(/\*\*What's going well[:\*]*\*\*([\s\S]*?)(?=\*\*Needs your attention|$)/i);
+            const focusMatch = transcription.insights.match(/\*\*Needs your attention[:\*]*\*\*([\s\S]*?)$/i);
+            const wellText = wellMatch?.[1]?.trim() || null;
+            const focusText = focusMatch?.[1]?.trim() || null;
+            return (
+              <>
+                {wellText && (
+                  <div className="px-5 py-4 bg-emerald-50 border-r border-slate-200">
+                    <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">✅ What's going well</p>
+                    <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-sans">{wellText}</div>
+                  </div>
+                )}
+                {focusText && (
+                  <div className="px-5 py-4 bg-amber-50">
+                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">⚠️ Needs your attention</p>
+                    <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap font-sans">{focusText}</div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
       <div className="p-6">
